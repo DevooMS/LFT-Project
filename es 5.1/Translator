@@ -1,0 +1,341 @@
+import java.io.*;
+
+public class Translator2 {
+		private Lexer lex;
+		private BufferedReader pbr;
+		private Token look;
+		
+		SymbolTable st = new SymbolTable();
+		CodeGenerator code = new CodeGenerator();
+		int count=0;
+
+		public Translator2(Lexer l, BufferedReader br) {
+			lex = l;
+			pbr = br;
+			move();
+		}
+
+		void move() { 
+			look = lex.lexical_scan(pbr);
+			System.out.println("token = " + look);
+		}
+
+		void error(String s) { 
+			throw new Error("near line " + lex.line + ": " + s);
+		}
+
+		void match(int t) {
+			if (look.tag == t) {
+				if (look.tag != Tag.EOF) move();
+			} else 
+				error("syntax error");
+		}
+
+		public void prog() {        
+			switch (look.tag){
+				case '=':
+				case '{':
+				case Tag.PRINT:
+				case Tag.READ:
+				case Tag.COND:
+				case Tag.WHILE:
+					int lnext_prog = code.newLabel();
+					statlist(lnext_prog);
+					code.emitLabel(lnext_prog);
+					match(Tag.EOF);
+					try {
+						code.toJasmin();
+					}
+					catch(java.io.IOException e) {
+						System.out.println("IO error\n");
+					};
+					break;
+				default:
+					error("Error in grammar <prog>");
+			}
+		}
+		
+		private void statlist(int lnext_prog){
+			switch (look.tag){
+				case '=':
+				case '{':
+				case Tag.PRINT:
+				case Tag.READ:
+				case Tag.COND:
+				case Tag.WHILE:
+					stat(lnext_prog);
+					statlistp(lnext_prog);
+					break;
+				default:
+					error("Error in grammar <statlist>");
+			}
+		}
+
+		private void statlistp(int lnext_prog) {
+			switch (look.tag) {
+				case ';':
+					match(';');
+					stat(lnext_prog);
+					statlistp(lnext_prog);
+					break;
+				case Tag.EOF:
+				case '}':
+					break;
+				default:
+					error("Error in grammar <statlistp>");
+			}
+		}
+		
+		private void stat(int lnext_prog) {
+			int l_next,l_false,l_true,l_ris,i;
+			switch(look.tag) {
+				case '=':
+					match('=');
+					if (look.tag==Tag.ID) {
+						int id_addr = st.lookupAddress(((Word)look).lexeme);
+						if (id_addr==-1) {
+							id_addr = count;
+							st.insert(((Word)look).lexeme,count++);
+						}                    
+						match(Tag.ID);
+						expr(lnext_prog);
+						code.emit(OpCode.istore,id_addr);
+					}else
+						error("Error in grammar (stat) after =( with " + look);
+					break;
+				case Tag.PRINT:
+					match(Tag.PRINT);
+					match('(');
+					exprlist(lnext_prog);
+					match(')');
+					code.emit(OpCode.invokestatic,1);
+					break;
+				case Tag.READ:
+					match(Tag.READ);
+					match('(');
+					if (look.tag==Tag.ID) {
+						int id_addr = st.lookupAddress(((Word)look).lexeme);
+						if (id_addr==-1) {
+							id_addr = count;
+							st.insert(((Word)look).lexeme,count++);
+						}                    
+						match(Tag.ID);
+						match(')');
+						
+						code.emit(OpCode.invokestatic,0);
+						code.emit(OpCode.istore,id_addr);   
+					}
+					else
+						error("Error in grammar (stat) after read( with " + look);
+					break;	
+				case Tag.COND:
+					match(Tag.COND);
+					//lnext_prog=code.newLabel();
+					l_next=whenlist(lnext_prog);
+					match(Tag.ELSE);
+					stat(lnext_prog);
+					code.emitLabel(l_next);
+					break;
+				case Tag.WHILE:
+					match(Tag.WHILE);
+					lnext_prog=code.newLabel();		//etichetta inizio while
+					code.emitLabel(lnext_prog);
+					l_next = code.newLabel();		//generazione etichetta salto
+					match('(');		
+					l_false=bexpr(l_next);			//generazione etichetta uscita (condizione falsa)
+					match(')');
+					code.emitLabel(l_next);
+					stat(lnext_prog);
+					code.emit(OpCode.GOto,lnext_prog);		//salto a inizio while
+					code.emitLabel(l_false);				//etichetta uscita while
+					break;
+				case '{':
+					match('{');
+					statlist(lnext_prog);
+					match('}');
+					break;
+				default:
+					error("Error in grammar <stat>");
+			}
+		 }
+
+		private int whenlist(int lnext_prog) {
+			int l_next;
+			switch (look.tag) {
+				case Tag.WHEN:
+					lnext_prog=code.newLabel();
+					l_next=whenitem(lnext_prog);
+					//next.add(l_next);
+					whenlistp(lnext_prog);
+					break;
+				default:
+					error("Error in grammar <whenlist>");
+					l_next=0;
+			}
+			return l_next;
+		}
+	
+		private void whenlistp(int lnext_prog) {
+			switch (look.tag) {
+				case Tag.WHEN:	
+					lnext_prog = code.newLabel();
+					lnext_prog=whenitem(lnext_prog); 
+					//next.add(lnext_prog);
+					whenlistp(lnext_prog);
+					break;
+				case Tag.ELSE:
+					break;
+				default:
+					error("Error in grammar <whenlistp>");
+			}
+		}
+		
+		private int whenitem(int lnext_prog) {
+			int l_next;
+			switch (look.tag) {
+				case Tag.WHEN:
+					match(Tag.WHEN);
+					match('(');
+					l_next=bexpr(lnext_prog);
+					code.emitLabel(lnext_prog);
+					match(')');
+					match(Tag.DO);
+					//lnext_prog = code.newLabel();
+					stat(lnext_prog);
+					code.emit(OpCode.GOto,lnext_prog);
+					code.emitLabel(l_next);
+					break;
+				default:
+					error("Error in grammar <whenitem>");
+			}
+			return lnext_prog;
+		}
+		
+		private int bexpr(int lnext_prog) {
+			OpCode op = null;
+			switch (look.tag) {
+				case Tag.RELOP:
+					if (((Word) look).lexeme.compareTo("==")==0)
+						op = OpCode.if_icmpeq;
+					else if (((Word) look).lexeme.compareTo("<>")==0)
+						op = OpCode.ifne;
+					else if (((Word) look).lexeme.compareTo("<=")==0)
+						op = OpCode.if_icmple;
+					else if (((Word) look).lexeme.compareTo(">=")==0)
+						op = OpCode.if_icmpge;
+					else if (((Word) look).lexeme.compareTo("<")==0)
+						op = OpCode.if_icmplt;
+					else if (((Word) look).lexeme.compareTo(">")==0)
+						op = OpCode.if_icmpgt;
+					else 
+						error("Error in grammar <bexpr>");
+					match(Tag.RELOP);
+					expr(lnext_prog);
+					expr(lnext_prog);
+                    code.emit(op,lnext_prog);
+					lnext_prog = code.newLabel();
+                    code.emit(OpCode.GOto,lnext_prog);
+					break;
+				default:
+					error("Error in grammar <bexpr>");
+			}
+			return lnext_prog;
+		}
+		
+		private void expr(int lnext_prog) {
+			int id_addr;
+			switch(look.tag) {
+				case '+':
+					match('+');
+					match('(');
+					exprlist(lnext_prog);
+					match(')');
+					code.emit(OpCode.iadd);
+					break;
+				case '-':
+					match('-');
+					expr(lnext_prog);
+					expr(lnext_prog);
+					code.emit(OpCode.isub);
+					break;
+				case '*':
+					match('*');
+					match('(');
+					exprlist(lnext_prog);
+					match(')');
+					code.emit(OpCode.imul);
+					break;
+				case '/':
+					match('/');
+					expr(lnext_prog);
+					expr(lnext_prog);
+					code.emit(OpCode.idiv);
+					break;
+				case Tag.NUM:
+					id_addr = count;
+					st.insert(Integer.toString(((NumberTok)look).val),count++);                  
+					code.emit(OpCode.ldc,((NumberTok)look).val); 
+					match(Tag.NUM);
+					break;
+				case Tag.ID:
+					id_addr = st.lookupAddress(((Word)look).lexeme);
+					if (id_addr==-1) {
+						error("Error in grammar <expr>");
+					}else{                    
+						match(Tag.ID);
+						code.emit(OpCode.iload,id_addr); 
+					}
+					break;
+				default:
+						error("Error in grammar <expr>");
+			}
+		}
+		
+		private void exprlist(int lnext_prog) {
+			switch (look.tag) {
+				case '+':
+				case '*':
+				case '-':
+				case '/':
+				case Tag.NUM:
+				case Tag.ID:
+					expr(lnext_prog);
+					exprlistp(lnext_prog);
+					break;
+				default:
+					error("Error in grammar <exprlist>");
+			}
+		}
+	
+		private void exprlistp(int lnext_prog) {
+			switch (look.tag) {
+				case '+':
+				case '*':
+				case '-':
+				case '/':
+				case Tag.NUM:
+				case Tag.ID:
+					expr(lnext_prog);
+					exprlistp(lnext_prog);
+					break;
+				case ')':
+					break;
+				default:
+					error("Error in grammar <exprlistp>");
+			}
+		}
+		
+		public static void main(String[] args) {
+			Lexer lex = new Lexer();
+			String path = "./prova2.txt"; // il percorso del file da leggere
+			try {
+				BufferedReader br = new BufferedReader(new FileReader(path));
+				Translator translator = new Translator(lex, br);
+				translator.prog();
+				System.out.println("Input OK");
+				br.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+}

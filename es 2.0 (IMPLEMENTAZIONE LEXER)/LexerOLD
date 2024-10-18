@@ -1,0 +1,235 @@
+import java.io.*;
+
+public class LexerMe {
+    String s = "";
+    
+    public static int line = 1;                 // campo che rappresenta la linea corrente che viente iniziallizzato a 1
+    private char peek = ' ';                    //inizializza con ' ' e rappresenta il carattere corrente 
+    
+    private void readch(BufferedReader br) {    //metodo che legge il carattere sucessivo --> System.in.read()  
+        try {
+            peek = (char) br.read();            //legge il carattere in input: esegue un cast a char  perchè la System.in.read() restituirebbe un int
+        } catch (IOException exc) {
+            System.out.println("HALLo");
+            peek = (char) -1;                   // La lettura non è andata a buon fine, fa il cast di -1 per poterlo scrivere in char peek
+        }
+    }
+
+    public Token lexical_scan(BufferedReader br) {                                  //metodo che esegue la traduzione in token del testo in input
+        
+        while (peek == ' ' || peek == '\t' || peek == '\n'  || peek == '\r') {      //se durante la traduzione vengono incontrati spazi, new line, ecc vengono ignorati e viene letto il carattere successivo
+            if (peek == '\n') 
+				line++;
+            readch(br);
+          
+        }
+        
+        switch (peek) {                                                             //gestione della casistica del carattere peek in input
+            
+            case '!':
+                peek = ' ';
+                return Token.not;
+		
+			case '(':                                                               // ... gestire i casi di (, ), {, }, +, -, *, /, ; ... //
+                peek = ' ';
+                return Token.lpt;
+				
+			case ')':
+                peek = ' ';
+                return Token.rpt;
+			
+			case '{':
+                peek = ' ';
+                return Token.lpg;
+				
+			case '}':
+                peek = ' ';
+                return Token.rpg;
+			
+			case '+':
+                peek = ' ';
+                return Token.plus;
+			
+			case '-':
+                peek = ' ';
+                return Token.minus;
+			
+			case '*':
+                peek = ' ';
+                return Token.mult;
+				
+			case ';':
+                peek = ' ';
+                return Token.semicolon;
+                
+            case '/': 
+                readch(br);
+                if(peek=='/'){
+                   try {
+                        System.out.println("TestX"+peek);
+                        br.readLine();           
+                    } catch (IOException exc) {
+                        peek = ' ';
+                                return null;
+                    }
+                  
+                }else if(peek=='*'){
+                   // System.out.println("Test1");
+                    while(peek==' '||Character.isLetter(peek)||peek=='*'){
+                        readch(br);
+                        //System.out.println("Test111"+peek);
+                        if(peek=='*'){
+                            readch(br);
+                            //System.out.println("Test111"+peek);
+                            if(peek=='/'){
+                                peek = ' ';
+                                return null;
+                            }else if(peek == '\n' || peek == (char) -1){
+                                //System.out.println("Errore di sintassi alla riga "+line+". Lettura terminata.");
+                                System.out.println("Test11");
+                            }
+                        }
+                    }
+                }else if (Character.isLetter(peek)||Character.isDigit(peek)||peek!='\n'){                                                    //gestisce i casi // /**/ 
+                    peek = ' ';
+                    System.out.println("Test11");
+                    return Token.div; 
+                }            
+                peek = ' ';
+                return null;
+            case '&':
+                readch(br);
+                if (peek == '&') {                                                     //la '&' viene gestita a parte perchè  è diversa da &&
+                    peek = ' ';
+                    return Word.and;                                                   // se la prima '&' non è seguita da una seconda, errore.
+                } else {
+                    System.err.println("Erroneous character00"                           //non  ho trovato nessun token perchè & da sola non è nulla di valido
+                            + " after & : "  + peek );
+                    return null;
+                }
+          
+			case '<':                                                                // ... gestire i casi di ||, <, >, <=, >=, ==, <>, = ... //
+                readch(br);
+                if (peek == ' ' || Character.isDigit(peek) || Character.isLetter(peek)) {
+                    return Word.lt;
+                } else if (peek == '='){
+					peek = ' ';
+					return Word.le;
+				} else if (peek == '>'){
+					peek = ' ';
+					return Word.ne;
+				} else {
+                    System.err.println("Erroneous character0"                           //non  ho trovato nessun token perchè & da sola non è nulla di valido
+                            + " after & : "  + peek );
+
+                        }
+                    return null;
+				
+			case '>':
+                readch(br);
+                if (peek == ' ' || Character.isDigit(peek) || Character.isLetter(peek)) {
+                    return Word.gt;
+                } else if (peek == '='){
+					peek = ' ';
+					return Word.ge;
+				} else {
+                    System.err.println("Erroneous character1"                           //non  ho trovato nessun token perchè & da sola non è nulla di valido
+                            + " after & : "  + peek );
+
+                        }
+                    return null;
+				
+			
+			case '=':
+                readch(br);
+                if (peek == ' ' || Character.isDigit(peek) || Character.isLetter(peek)) {
+                    return Token.assign;
+                } else if (peek == '='){
+					peek = ' ';
+					return Word.eq;
+				}  
+
+            case (char)-1:
+                
+                
+                return new Token(Tag.EOF);
+                
+            default:
+					
+            
+            if (Character.isLetter(peek)) {
+                // ... gestire il caso degli identificatori e delle parole chiave /
+                
+                s=s+Character.toString(peek);                                
+                readch(br);
+                
+                while(Character.isDigit(peek) || Character.isLetter(peek) || peek=='_' ){
+                   s=s+Character.toString(peek);
+                   readch(br);   
+                   
+                }
+					
+					if(s.equals(Word.cond.lexeme))
+						return Word.cond;
+					else if(s.equals(Word.when.lexeme))
+						return Word.when;
+					else if(s.equals(Word.then.lexeme))
+						return Word.then;
+					else if(s.equals(Word.elsetok.lexeme))
+						return Word.elsetok;
+					else if(s.equals(Word.whiletok.lexeme))
+						return Word.whiletok;
+					else if(s.equals(Word.dotok.lexeme))
+						return Word.dotok;
+					else if(s.equals(Word.seq.lexeme))
+						return Word.seq;
+					else if(s.equals(Word.print.lexeme))
+						return Word.print;
+					else if(s.equals(Word.read.lexeme))
+						return Word.read;
+					else 
+                        return new Word(Tag.ID,s);                                  //return new Word(Tag.ID,s);
+
+            }else if (Character.isDigit(peek)) {
+                if(Character.getNumericValue(peek)==0){
+                    System.err.println("Erroneous character2: " + peek );
+                    return null;
+                }
+					s=s+Character.toString(peek);	                                     // ... gestire il caso dei numeri ... //
+					readch(br);
+					
+					do{
+						if(Character.isLetter(peek)){
+							System.err.println("Erroneous character3: " + peek );
+							return null;
+						}
+						s=s+Character.toString(peek);
+						readch(br);
+					}while(Character.isDigit(peek));
+
+                    
+                	return new NumberTok(Tag.NUM,Integer.parseInt(s));
+              
+            } else {
+                System.err.println("Erroneous character4: " + peek );
+                return null;
+            }
+        }
+    }
+		
+    public static void main(String[] args) {
+        LexerMe lex = new LexerMe();                                                        // crea nuovo oggetto lexer
+        String path = "./prova.txt"; // il percorso del file da leggere
+        try {
+            BufferedReader br = new BufferedReader(new FileReader(path));
+            Token tok;
+            
+            do {
+                tok = lex.lexical_scan(br);
+                if(tok!=null) System.out.println("Scan: " + tok);                //Stampa su schermo la rappresentazione testuale di quel token (grazie al metodo toString della classe token
+            } while (tok==null||tok.tag != Tag.EOF);                          //o in alternativa il metodo toString della classe Word/Number in quanto classe che estende token)
+            br.close();                                            //cicla fino ad arrivare all'end of file
+        } catch (IOException e) {e.printStackTrace();}    
+    }
+
+}

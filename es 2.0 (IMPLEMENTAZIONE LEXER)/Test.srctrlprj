@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<config>
+    <source_groups>
+        <source_group_0491d265-109c-407b-883a-12c5d2ade978>
+            <class_paths>
+                <class_path>C:/Program Files/Java/jdk-14.0.2/bin</class_path>
+                <class_path>C:/Program Files/Java/jdk-14.0.2</class_path>
+                <class_path>C:/Program Files/Java/jdk-14.0.2/bin/java.exe</class_path>
+                <class_path>C:/Program Files/Java/jdk-14.0.2/bin/javac.exe</class_path>
+            </class_paths>
+            <java_standard>12</java_standard>
+            <name>Java Source Group</name>
+            <source_extensions>
+                <source_extension>.java</source_extension>
+            </source_extensions>
+            <source_paths>
+                <source_path>./</source_path>
+            </source_paths>
+            <status>enabled</status>
+            <type>Java Source Group</type>
+            <use_jre_system_library>1</use_jre_system_library>
+        </source_group_0491d265-109c-407b-883a-12c5d2ade978>
+    </source_groups>
+    <version>8</version>
+</config>

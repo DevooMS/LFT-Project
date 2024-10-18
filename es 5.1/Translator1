@@ -1,0 +1,353 @@
+import java.io.*;
+
+import org.graalvm.compiler.nodes.java.NewMultiArrayNode;
+
+public class Translator {
+		private Lexer lex;
+		private BufferedReader pbr;
+		private Token look;
+		
+		SymbolTable st = new SymbolTable();
+		CodeGenerator code = new CodeGenerator();
+		int count=0;
+
+		public Translator(Lexer l, BufferedReader br) {
+			lex = l;
+			pbr = br;
+			move();
+		}
+
+		void move() { 
+			look = lex.lexical_scan(pbr);
+			System.out.println("token = " + look);
+		}
+
+		void error(String s) { 
+			throw new Error("near line " + lex.line + ": " + s);
+		}
+
+		void match(int t) {
+			if (look.tag == t) {
+				if (look.tag != Tag.EOF) move();
+			} else 
+				error("syntax error");
+		}
+
+		public void prog() {        
+			switch (look.tag){
+				case '=':
+				case '{':
+				case Tag.PRINT:
+				case Tag.READ:
+				case Tag.COND:
+				case Tag.WHILE:
+					int lnext_prog = code.newLabel();
+					statlist(lnext_prog);
+					code.emitLabel(lnext_prog);
+					match(Tag.EOF);
+					try {
+						code.toJasmin();
+					}
+					catch(java.io.IOException e) {
+						System.out.println("IO error\n");
+					};
+					break;
+				default:
+					error("Error in grammar <prog>");
+			}
+		}
+		
+		private void statlist(int lnext_prog){
+			switch (look.tag){
+				case '=':
+				case '{':
+				case Tag.PRINT:
+				case Tag.READ:
+				case Tag.COND:
+				case Tag.WHILE:
+					//lnext_prog = code.newLabel();
+					stat(lnext_prog);
+					//code.emitLabel(lnext_prog);
+					statlistp(lnext_prog);
+					break;
+				default:
+					error("Error in grammar <statlist>");
+			}
+		}
+
+		private void statlistp(int lnext_prog) {
+			switch (look.tag) {
+				case ';':
+					match(';');
+					//lnext_prog = code.newLabel();
+					stat(lnext_prog);
+					//code.emitLabel(lnext_prog);
+					statlistp(lnext_prog);
+					break;
+				case Tag.EOF:
+				case '}':
+					break;
+				default:
+					error("Error in grammar <statlistp>");
+			}
+		}
+		
+		private void stat(int lnext_prog) {
+			switch(look.tag) {
+				case '=':
+					match('=');
+					if (look.tag==Tag.ID) {
+						int id_addr = st.lookupAddress(((Word)look).lexeme);
+						if (id_addr==-1) {
+							id_addr = count;
+							st.insert(((Word)look).lexeme,count++);
+						}                    
+						match(Tag.ID);
+						expr();
+						code.emit(OpCode.istore,id_addr);
+					}else
+						error("Error in grammar (stat) after =( with " + look);
+					break;
+				case Tag.PRINT:
+					match(Tag.PRINT);
+					match('(');
+					if (look.tag==Tag.ID) {
+						int id_addr = st.lookupAddress(((Word)look).lexeme);
+						if (id_addr==-1) {
+							error("Error in grammar (stat) after =( with " + look+")");
+						}else{                 
+							exprlist();
+							match(')');
+
+							code.emit(OpCode.invokestatic,1);
+						}
+					}
+					break;
+				case Tag.READ:
+					match(Tag.READ);
+					match('(');
+					if (look.tag==Tag.ID) {
+						int id_addr = st.lookupAddress(((Word)look).lexeme);
+						if (id_addr==-1) {
+							id_addr = count;
+							st.insert(((Word)look).lexeme,count++);
+						}                    
+						match(Tag.ID);
+						match(')');
+
+						code.emit(OpCode.invokestatic,0);
+						code.emit(OpCode.istore,id_addr);   
+					}
+					else
+						error("Error in grammar (stat) after read( with " + look);
+					break;	
+				case Tag.COND:
+					match(Tag.COND);
+					lnext_prog = code.newLabel();
+					code.emit(OpCode.GOto,lnext_prog);
+					whenlist(lnext_prog);
+					code.emitLabel(lnext_prog+1);
+					match(Tag.ELSE);
+					stat(lnext_prog);
+					break;
+				case Tag.WHILE:
+					int Bnext=code.newLabel();
+					int Btrue=code.newLabel();
+					S1.next=NewLabel();
+					S.code=S1.next:B.code||B.true:S1.code
+
+					case '{':
+					match('{');
+					statlist(lnext_prog);
+					match('}');
+					break;
+				default:
+					error("Error in grammar <stat>");
+			}
+		 }
+
+		private void whenlist(int lnext_prog) {
+			switch (look.tag) {
+				case Tag.WHEN:
+					//lnext_prog = code.newLabel();
+					whenitem(lnext_prog);
+					//code.emitLabel(lnext_prog);
+					whenlistp(lnext_prog);
+					break;
+				default:
+					error("Error in grammar <whenlist>");
+			}
+		}
+	
+		private void whenlistp(int lnext_prog) {
+			switch (look.tag) {
+				case Tag.WHEN:	
+					whenitem(lnext_prog);
+					whenlistp(lnext_prog);
+					break;
+				case Tag.ELSE:
+ 
+					break;
+				default:
+					error("Error in grammar <whenlistp>");
+			}
+		}
+		
+		private void whenitem(int lnext_prog) {
+			switch (look.tag) {
+				case Tag.WHEN:
+					match(Tag.WHEN);
+					match('(');
+					//lnext_prog = code.newLabel();
+					bexpr(lnext_prog);
+					//code.emitLabel(lnext_prog);
+					match(')');
+					match(Tag.DO);
+					code.emitLabel(lnext_prog);
+					stat(lnext_prog);
+					break;
+				default:
+					error("Error in grammar <whenitem>");
+			}
+		}
+		
+		private void bexpr(int lnext_prog) {
+			OpCode op = null;
+			
+			switch (look.tag) {
+				case Tag.RELOP:
+					if (((Word) look).lexeme.compareTo("==")==0)
+						op = OpCode.if_icmpeq;
+					else if (((Word) look).lexeme.compareTo("<>")==0)
+						op = OpCode.ifne;
+					else if (((Word) look).lexeme.compareTo("<=")==0)
+						op = OpCode.if_icmple;
+					else if (((Word) look).lexeme.compareTo(">=")==0)
+						op = OpCode.if_icmpge;
+					else if (((Word) look).lexeme.compareTo("<")==0)
+						op = OpCode.if_icmplt;
+					else if (((Word) look).lexeme.compareTo(">")==0)
+						op = OpCode.if_icmpgt;
+					else 
+						error("Error in grammar <bexpr>");
+					match(Tag.RELOP);
+					expr();
+					expr();
+                    //lnext_prog = code.newLabel();
+                    System.out.println("Test "+lnext_prog);
+                    code.emit(op,lnext_prog);
+					System.out.println("Test1 "+lnext_prog);
+					lnext_prog = code.newLabel();
+                    code.emit(OpCode.GOto,lnext_prog);
+					break;
+				default:
+					error("Error in grammar <bexpr>");
+			}
+		}
+		
+		private void expr() {
+			int id_addr;
+			switch(look.tag) {
+				case '+':
+					match('+');
+					match('(');
+					exprlist();
+					match(')');
+					code.emit(OpCode.iadd);
+					break;
+				case '-':
+					match('-');
+					//lnext_prog = code.newLabel();
+					expr();
+					//code.emitLabel(lnext_prog);
+					expr();
+					code.emit(OpCode.isub);
+					break;
+				case '*':
+					match('*');
+					match('(');
+					exprlist();
+					match(')');
+					code.emit(OpCode.imul);
+					break;
+				case '/':
+					match('/');
+					//lnext_prog = code.newLabel();
+					expr();
+					//code.emitLabel(lnext_prog);
+					expr();
+					code.emit(OpCode.idiv);
+					break;
+				case Tag.NUM:
+						
+					id_addr = count;
+					st.insert(Integer.toString(((NumberTok)look).val),count++);                  
+					code.emit(OpCode.ldc,((NumberTok)look).val); 
+					match(Tag.NUM);
+					break;
+				case Tag.ID:
+					id_addr = st.lookupAddress(((Word)look).lexeme);
+					if (id_addr==-1) {
+						error("Error in grammar <expr>");
+					}else{                    
+						match(Tag.ID);
+						code.emit(OpCode.iload,id_addr); 
+					}
+					break;
+				default:
+						error("Error in grammar <expr>");
+			}
+		}
+		
+		private void exprlist() {
+			switch (look.tag) {
+				case '+':
+				case '*':
+				case '-':
+				case '/':
+				case Tag.NUM:
+				case Tag.ID:
+					//lnext_prog = code.newLabel();
+					expr();
+					//code.emitLabel(lnext_prog);
+					exprlistp();
+					break;
+				default:
+					error("Error in grammar <exprlist>");
+			}
+		}
+	
+		private void exprlistp() {
+			switch (look.tag) {
+				case '+':
+				case '*':
+				case '-':
+				case '/':
+				case Tag.NUM:
+				case Tag.ID:
+					//lnext_prog = code.newLabel();
+					expr();
+					//code.emitLabel(lnext_prog);
+					exprlistp();
+					break;
+				case ')':
+					break;
+				default:
+					error("Error in grammar <exprlistp>");
+			}
+		}
+		
+		public static void main(String[] args) {
+			Lexer lex = new Lexer();
+			String path = "./prova.txt"; // il percorso del file da leggere
+			try {
+				BufferedReader br = new BufferedReader(new FileReader(path));
+				Translator translator = new Translator(lex, br);
+				translator.prog();
+				System.out.println("Input OK");
+				br.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+}

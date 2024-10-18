@@ -1,0 +1,305 @@
+import java.io.*; 
+import java.util.*;
+
+public class Translator {
+    private Lexer lex;
+    private BufferedReader pbr;
+    private Token look;
+    
+    SymbolTable st = new SymbolTable();
+    CodeGenerator code = new CodeGenerator();
+    int count=0;
+
+    public Translator(Lexer l, BufferedReader br) {
+        lex = l;
+        pbr = br;
+        move();
+    } //Translator		
+
+   void move() { 
+		look = lex.lexical_scan(pbr);
+        System.err.println("token = " + look);
+    } //move()
+
+    void error(String s) { 
+		System.out.println(s + " Metodo: " + Parser.s);
+		System.exit(-1);
+    } //error()
+	
+    void match(int t) {
+		if (look.tag == t) {
+			if (look.tag != Tag.EOF) move();
+		} else {
+			error("Errore sintattico.");
+		}
+    } //match()
+
+    public void prog() {        
+		int lnext = code.newLabel();
+
+		Parser.s = "<prog>";
+		if (look.tag == Tag.PRINT || look.tag == Tag.READ || look.tag == Tag.IF || look.tag == Tag.WHILE || look.tag == Tag.ID || look.tag == (int) '{') {
+			statlist(lnext);
+			//code.emitLabel(lnext);
+			match(Tag.EOF);
+			try {
+				code.toJasmin();
+			} catch(java.io.IOException e) {
+				System.out.println("IO error\n");
+			};
+		} else 
+			error("Errore sintattico.");
+    } //prog()
+	
+	public void statlist(int lnext) {
+        Parser.s = "<statlist>";
+		stat(lnext);
+        statlist_p(lnext);
+		
+    } //statlist()
+
+	public void stat(int lnext) {
+		Parser.s = "<stat>";
+		switch(look.tag) {
+			case Tag.ID:
+				Token m_token = look;
+				match(Tag.ID);
+				String id = ((Word) m_token).lexeme;
+				match(Tag.ASSIGN);
+				expr();
+				int m_val = st.lookupAddress(id);
+				if (m_val == -1) {
+					code.emit(OpCode.istore, count);
+					st.insert(id, count++);
+				} else {
+					code.emit(OpCode.istore, m_val);
+				}
+			break;
+			case Tag.PRINT:
+				match(Tag.PRINT);
+				match('(');
+				expr();
+				code.emit(OpCode.invokestatic,1);
+				match(')');
+				break;
+			case Tag.READ:
+				match(Tag.READ);
+				match('(');
+				if (look.tag==Tag.ID) {
+					int read_id_addr = st.lookupAddress(((Word)look).lexeme);
+					if (read_id_addr==-1) {
+						read_id_addr = count;
+						st.insert(((Word)look).lexeme,count++);
+					}                    
+					match(Tag.ID);
+					match(')');
+					code.emit(OpCode.invokestatic,0);
+					code.emit(OpCode.istore,read_id_addr);   
+				}
+				else
+					error("Error in grammar (stat) after read( with " + look);
+				break;
+			case Tag.IF: 
+                match(Tag.IF);
+                match('(');
+                int ltrue_stat_if = code.newLabel();
+                int lfalse_stat_if = code.newLabel();
+                b_expr(ltrue_stat_if, lfalse_stat_if);
+				
+				match(')');
+				
+				code.emitLabel(ltrue_stat_if);
+				stat(lnext);
+				
+                if(look.tag == Tag.ELSE) {
+					code.emit(OpCode.GOto, lnext);
+					code.emitLabel(lfalse_stat_if);
+					match(Tag.ELSE);
+                    stat(lnext);
+                    //code.emit(OpCode.GOto, lnext);
+                } else {
+					//code.emit(OpCode.GOto, lnext);
+					code.emitLabel(lfalse_stat_if);
+				}
+				if(lnext==0) code.emitLabel(lnext);
+                break;
+			case Tag.WHILE:
+				match(Tag.WHILE);
+				match('(');
+
+                int ltrue_stat_while = code.newLabel();
+                int lnext_stat_while = code.newLabel();
+				int end_while = code.newLabel();
+				if(ltrue_stat_while!=0)	code.emit (OpCode.GOto, ltrue_stat_while);
+                code.emitLabel(ltrue_stat_while);
+                b_expr(lnext_stat_while, end_while);
+                match(')');
+                code.emitLabel(lnext_stat_while);
+                stat(ltrue_stat_while);
+				code.emit (OpCode.GOto, ltrue_stat_while);
+				//code.emitLabel(lnext);
+				code.emitLabel(end_while);
+				break;
+			case '{':
+                match('{');
+                statlist(lnext);
+                match('}');
+                break;
+		}
+	} //stat()
+
+	public void statlist_p(int lnext) {
+        Parser.s = "<statlist_p>";
+		switch (look.tag) {
+			case ';':
+				match(';');
+				if(look.tag==Tag.EOF){
+					error("Errore sintattico.");
+				}
+				stat(lnext);
+				statlist_p(lnext);
+				//code.emitLabel(lnext);
+				//code.emit(OpCode.GOto, lnext);
+				break;
+			/*case '}':
+				match('}');
+				if(look.tag==Tag.EOF){
+					break;
+				}
+				stat(lnext);
+				statlist_p(lnext);
+				break;*/
+			default:
+				break;
+		}
+    } //statlist_p()
+	
+	private void expr() {
+        term();
+        exprp();
+    } //expr()
+
+	private void b_expr(int ltrue, int lfalse) {
+		expr();
+		/*System.out.println(ltrue);
+		System.out.println(lfalse);*/
+		if (look == Word.eq) {
+			match(Tag.RELOP);
+			expr();
+			code.emit(OpCode.if_icmpeq,ltrue);
+			code.emit(OpCode.GOto,lfalse);
+		} else if (look == Word.ne) {
+			match(Tag.RELOP);
+			expr();
+			code.emit(OpCode.if_icmpne,ltrue);
+			code.emit(OpCode.GOto,lfalse);
+		} else if (look == Word.le) {
+			match(Tag.RELOP);
+			expr();
+			code.emit(OpCode.if_icmple,ltrue);
+			code.emit(OpCode.GOto,lfalse);
+		} else if (look == Word.ge) {
+			match(Tag.RELOP);
+			expr();
+			code.emit(OpCode.if_icmpge,ltrue);
+			code.emit(OpCode.GOto,lfalse);
+		} else if (look == Word.lt) {
+			match(Tag.RELOP);
+			expr();
+			code.emit(OpCode.if_icmplt,ltrue);
+			code.emit(OpCode.GOto,lfalse);
+		} else if (look == Word.gt) {
+			match(Tag.RELOP);
+			expr();
+			code.emit(OpCode.if_icmpgt,ltrue);
+			code.emit(OpCode.GOto,lfalse);
+		}
+	} //b_expr()
+    
+	private void exprp() {
+		switch(look.tag) {
+			case '+':
+				match('+');
+				term();
+				code.emit(OpCode.iadd);
+				exprp();
+				break;
+			case '-':
+				match('-');
+				term();
+				code.emit(OpCode.isub);
+				exprp();
+				break;
+		}
+	} //exprp()
+
+	private void term() {
+		Parser.s = "<term>";
+		if (look.tag == '(' || look.tag == Tag.NUM || look.tag == Tag.ID) {
+            fact();
+            termp();
+        } else {
+            error("Errore sintattico in term()." + look.tag);
+        }
+    } //term()
+	
+	private void termp() {		
+		Parser.s = "<termp>";
+		switch (look.tag) {
+			case '*':
+				match('*');
+				fact();
+                termp();
+                code.emit(OpCode.imul);
+				break;
+			case '/':
+				match('/');
+				fact();
+                termp();
+                code.emit(OpCode.idiv);
+				break;
+			default:
+				break;
+		}
+    } //termp()
+	
+	private void fact() {
+		Parser.s = "<fact>";
+        switch (look.tag) {
+            case Tag.NUM:
+				String numstr = lex.getnmb();
+				int num_val = Integer.parseInt(numstr);
+                code.emit(OpCode.ldc, num_val);
+                match(Tag.NUM);
+                break;
+            case Tag.ID:
+                Token m_id = look;
+                match(Tag.ID);
+				code.emit(OpCode.iload, st.lookupAddress(((Word) m_id).lexeme));
+                break;
+            case '(':
+                match('(');
+                expr();
+                if (look.tag == ')') {
+                    match(')');
+                } else {
+                    error("Syntax error in fact.");
+                }
+                break;
+            default:
+                break;
+        }
+    } //fact()
+
+	public static void main(String[] args) {
+		Lexer lex = new Lexer();
+
+		String path = "/Users/Stefano Martinelli/Desktop/Progetto/Es5/A.pas"; // il percorso del file da leggere
+		try {
+			BufferedReader br = new BufferedReader(new FileReader(path));
+				Translator translator = new Translator(lex, br); 
+				translator.prog();
+				br.close();
+		} catch (IOException e) {e.printStackTrace();}    
+	}    
+}

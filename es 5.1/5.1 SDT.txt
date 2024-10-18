@@ -1,0 +1,256 @@
+
+ANNULLABILI: statlistp , whenlistp , exprlistp
+
+(prog) 		::== <statlist>EOF
+					statlist.next=newlabel()}<statlist>{emitlabel(statlist.next)}
+(statlist) 	::== <stat><statlistp>
+(statlistp) ::==;<stat><statlistp>||ε
+
+(stat) 		::== =ID<expr> 
+					   |print(<exprlist>)
+					   |read(ID)
+					   |cond<whenlist>else<stat>
+					   |while(<bexpr>)<stat>
+					   |{statlist}
+(whenlist) 	::== <whenitem><whenlistp>
+(whenlistp) ::== <whenitem><whenlistp>|ε
+(whenitem)  ::== when(<bexpr>)do<stat>
+(bexpr) 	::== RELOP<expr><expr>   
+(expr) 		::== +(<exprlist>) | -<expr><expr>  
+			   | *(<exprlist>) | /<expr><expr>
+			   | NUM|ID
+(exprlist) 	::== <expr><exprlistp>       				
+(exprlistp) ::== <expr><exprlistp>|ε  
+---------------------------------------------------------------------------------------------------------------------
+FIRST:
+ANNULLABILI: statlistp , whenlistp , exprlistp
+
+FIRST(prog) = 		 FIRST(statlist)				     ={print,read,cond,while,{,=}
+FIRST(statlist) =	 FIRST(stat)(statlistp non conta perche stat non e annulabile)			 ={print,read,cond,while,{,=}
+FIRST(statlistp) =   FIRST ;(stat)(statlistp)|ε          ={;}
+FIRST(stat) =        FIRST( = ID(expr))
+						  (print(<exprlist>))
+						  (read(ID))
+						  (cond(whenlist))(else(<stat>)) =(mi tengo solo cond per la 2condizione dell algoritmo )
+						  (while(bexpr))
+						  ({<statlist>})                 ={print,read,cond,while,{,=}
+						  
+FIRST(whenlist) =    FIRST(whenitem)(whenlistp)          ={when}
+FIRST(whenlistp) =   FIRST(whenitem)(whenlistp)|ε        ={when}
+FIRST(whenitem) =    FIRST(when(bexpr))(do(stat))        ={when}
+FIRST(bexpr) =       FIRST(RELOP(expr)(expr))            ={RELOP}
+FIRST(expr) =        FIRST(+(exprlist)) 
+						  (*(exprlist))
+						  (-(expr)(expr))
+						  (/(expr)(expr))				 
+						  (NUM)(ID)						 ={NUM,ID,+,-,*,/}					
+FIRST(exprlist) =    FIRST(expr)(exprlistp)              ={NUM,ID,+,-,*,/}
+FIRST(exprlistp) =   FIRST(expr)(exprlistp)              ={NUM,ID,+,-,*,/}
+//--------------------------------------------------------------------------------------------------------------------------
+FOLLOW:
+FIRST(EOF)<=FOLLOW(STATLIST)
+
+FOLLOW(STATLIST)<=FOLLOW(STAT)
+FIRST(STATLISTP)<=FOLLOW(STAT)
+FOLLOW(STATLIST)<=FOLLOW(STATLISTP)
+
+FOLLOW(STATLISTP)<=FOLLOW(STAT)
+FIRST(STATLISTP)<=FOLLOW(STAT)
+//FOLLOW(STATLISTP)<=FOLLOW(STATLISTP)
+
+FOLLOW(STAT)<=FOLLOW(EXPR) 
+FIRST(")")<=FOLLOW(EXPRLIST)
+FIRST("else")<=FOLLOW(WHENLIST)
+FIRST(")")<=FOLLOW(BEXPR)
+FIRST("}")<=FOLLOW(STATLIST)
+
+FOLLOW(WHENLIST)<=FOLLOW(WHENITEM)
+FIRST(WHENLISTP)<=FOLLOW(WHENITEM)
+FOLLOW(WHENLIST)<=FOLLOW(WHENLISTP)
+
+FIRST(")")<=FOLLOW(BEXPR)
+FOLLOW(WHENITEM)<=(STAT)
+
+FOLLOW(BEXPR)<=FOLLOW(EXPR)
+//FIRST(EXPR)<=FOLLOW(EXPR)
+
+FOLLOW(")")<=FOLLOW(EXPRLIST)
+
+FIRST(EXPRLISTP)<=FOLLOW(EXPR)
+FOLLOW(EXPRLIST)<=FOLLOW(EXPR)
+FOLLOW(EXPRLIST)<=FOLLOW(EXPRLISTP)
+
+ANNULLABILI: statlistp , whenlistp , exprlistp
+//-------------------------------------------------------------------------------------------------------------------------------
+TAB:            X:
+
+PROG            $
+STATLIST        ("}" "EOF")		
+STATLISTP    	("}" "EOF")	
+STAT			FOLLOW(STATLIST)FIRST(STATLISTP)FOLLOW(STATLISTP)FOLLOW(WHENITEM) = ("}" ";" "EOF" "ELSE" "WHEN")
+WHENITEM 		FOLLOW(WHENLIST)FIRST(WHENLISTP)                                  = ("ELSE" "WHEN" ";")
+WHENLIST	    ("ELSE" "WHEN")
+WHENLISTP		("ELSE")
+BEXPR		    (")")
+EXPR			FOLLOW(BEXPR)FOLLOW(STAT) =("}" ")" ";" "EOF" "ELSE" "WHEN")
+EXPRLIST	    (")")
+EXPRLISTP	    (")")
+  
+
+GUIDA:
+$FOLLOW(PROG)
+PROG        = FIRST(STATLIST EOF)                   ={print,read,cond,while,{,=} 
+STATLIST	= FIRST(<STAT><STATLISTP>)			    ={print,read,cond,while,{,=} 
+STATLISTP	= FIRST(";" <STAT><STATLISTP>)          ={";"}
+			  FIRST(ε) U FOLLOW(STATLISTP)			={"}" EOF }//
+STAT		= FIRST("=" ID <EXPR>)					={"="}
+			  FIRST(PRINT (<EXPRLIST>))				={"PRINT"}
+			  FIRST(READ (ID))					    ={"READ"}
+			  FIRST(COND <WHENLIST> ELSE <STAT>)	={"COND"}
+			  FIRST(WHILE (<BEXPR>)<STAT>)			={"WHILE"}
+			  FIRST({<STATLIST>})					={"{"}
+WHENLIST	= FIRST(<WHENITEM><WHENLISTP>)			={"WHEN"}
+WHENLISTP	= FIRST(<WHENITEM><WHENLISTP>)			={"WHEN"}
+			  FIRST(ε)U FOLLOW(WHENLISTP)		    ={"ELSE"}
+WHENITEM	= FIRST(when(<BEXPR>) do <STAT>)        ={"WHEN"}
+BEXPR		= FIRST(RELOP <EXPR><EXPR>)				={RELOP}
+EXPR		= FIRST(+(<EXPRLIST>))					={"+"}
+			  FIRST(-(<EXPRLIST>))					={"-"}
+			  FIRST(* <EXPR><EXPR>)				    ={"*"}
+			  FIRST(/ <EXPR><EXPR>)				    ={"/"}
+			  FIRST(NUM)							={"NUM"}
+			  FIRST(ID)								={"ID"}
+EXPRLIST	= FIRST(<EXPR><EXPRLISTP>)				={NUM,ID,+,-,*,/}
+EXPRLISTP	= FIRST(<EXPR><EXPRLISTP>)				={NUM,ID,+,-,*,/}
+EXPRLISTP   = FIRST(ε) U FOLLOW(EXPRLISTP)			={")"}
+----------------------------------------------------------------------------------------------------------------------------------
+SDT OnTheFly
+
+Prog 	  -> StatList		{ emit(label) } 			
+			$
+
+StatList  -> Stat
+			 StatListP
+           
+StatListP -> ; 
+			 Stat 
+			 StatListP 
+
+Stat -> = 
+		     ID
+			 Expr			{ emit(istore) }
+
+Stat ->      print 
+			( 
+			 ExperList 
+			)		        { emit(invokestatic) }
+
+Stat-> read 
+			( 
+			ID 
+			)		        { emit(invokestatic) }
+		                    { emit(store) }
+
+Stat -> 	cond 
+			WhenList
+			else 
+			Stat			{ emit(label) }
+
+Stat -> while 				{ emit(label) }
+			( 
+			Bexpr 
+			) 				{ emit(label) }
+			Stat			{ emit(GOTO) }
+							{ emit(label) }
+
+Stat -> 	{ 
+			StatList
+			}
+
+WhenList -> Whenitem
+			WhenListP
+
+WhenListP-> Whenitem
+			WhenListP
+
+WhenListP-> EPS
+
+When -> 	when 
+			( 
+			Bexpr 			{ emit(label) }
+			) 
+			do 
+
+Bexpr -> 	relop 
+			Expr 
+			Expr			{ emit(relop) }
+							{ emit(GOTO) }
+
+Expr -> 	+ 
+			( 
+			EL 
+			)				{ emit(iadd) }
+
+Expr -> 	* 
+			( 
+			ExperList
+			)				{ emit(imul) }
+
+Expr -> 	- 
+			Expr 
+			Expr			{ emit(isub) }
+
+Expr -> 	/
+			Expr 
+			Expr			{ emit(idiv) }
+
+Expr -> 	NUM				{ emit(ldc) }
+
+Expr ->		ID				{ emit(iload) }
+
+ExperList -> Expr 
+			 ExperListP
+
+ExperListP -> Expr 
+			ExperListP		{ emit(iadd) } / { emit(imul) }
+
+ExperListP -> EPS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

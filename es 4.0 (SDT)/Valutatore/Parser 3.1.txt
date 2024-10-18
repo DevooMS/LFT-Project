@@ -1,0 +1,48 @@
+Parser Aritmetiche Formula Infissa
+
+E-->TE'
+E'-->+TE'|-TE'|ε      NULL
+T-->FT'
+T'-->*FT'|/FT'|ε      NULL
+F-->(E)|NUM
+
+FIRST:
+FIRST(E) ==	 FIRST(TE')=FIRST(T)= {(,NUM }
+FIRST(E')==	 FIRST(+TE') U FIRST (-TE') U FIRST(ε)= {+,-}
+FIRST(T) ==  FIRST(FT')=FIRST(FIRST F)= {(,NUM }
+FIRST(T')==	 FIRST(*FT') U FIRST(/FT') U FIRST(ε)={*,/}
+FIRST(F) ==	 FIRST((E)) U FIRS(NUM)= {(,NUM)}
+
+FOLLOW:
+$FOLLOW(E)
+E -->TE'{+,-}=	FIRST(E')<=FOLLOW(T)
+				FOLLOW(E)<=FOLLOW(T)
+				FOLLOW(E)<=FOLLOW(E')
+E'-->+TE'=  	FIRST(E')<=FOLLOW(T)	 
+E'-->-TE'=		FIRST(E')<=FOLLOW(T)
+T -->FT' =		FIRST(T')<=FOLLOW(F)
+		        FOLLOW(T)<=FOLLOW(F)
+T'-->*FT'=		FIRST(T')<=FOLLOW(F)
+F -->(E) =	F	IRST())<=FOLLOW(E)
+			 
+TAB:			 
+X 	FOLLOW(X)
+------------
+E 	{$,)}
+E'	{$,)}
+T 	{$,),+,-}
+T'	{$,),+,-}
+F	{$,),+,-,*,/}
+
+GUIDA:
+
+GUIDA(E-->TE')    		= FIRST(TE')=FIRST(T)=		{(,NUM }
+GUIDA(E'-->+TE')  		= FIRST(+TE')  =			{+}
+GUIDA(E'-->ε)			= FIRST(ε) U FOLLOW(E')=	{$,)}
+GUIDA(E'-TE')	 		= FIRST(-TE')  =			{-}
+GUIDA(T-->FT')			= FIRST(FT')   =			{(,NUM}
+GUIDA(T'-->*FT')		= FIRST(*FT')  =			{*}
+GUIDA(T'-->ε)			= FIRST(ε) U FOLLOW(T')   	{$,),+,-} 
+GUIDA(E-->/FT')			= FIRST(/FT')  =			{/}
+GUIDA(F-->(E))			= FIRST((E))   =			{(}
+GUIDA(F-->NUM)			= FIST(NUM)    =			{NUM}

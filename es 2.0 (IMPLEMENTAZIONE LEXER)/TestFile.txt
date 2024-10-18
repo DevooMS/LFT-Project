@@ -1,0 +1,32 @@
+(a<(a+b));
+000545
+a/
+9asdas
+_a_
+/*@#?**/
+
+if(peek=='/')
+                        count++;
+                    else if (count==2)
+                    return null;|| 
+                    peek=='/'
+                    int count=0;
+
+
+                    if()
+                System.out.println("im here") ;   
+                
+                readch(br);
+                if(count==2){
+                
+                s =" ";
+                }
+                else if(count==1)  
+                 
+
+ else if(peek!='*'){
+                            System.err.println("Erroneous character00"                           //non  ho trovato nessun token perchè & da sola non è nulla di valido
+                            + " after & : "  + peek );
+                            return null;
+
+                        }
